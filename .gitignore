@@ -3,3 +3,4 @@ __pycache.*py
 .env
 wallet_env
 .idea
+app/test.js
