@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, Request
 from sqlalchemy.orm import Session
 
 
@@ -35,10 +35,10 @@ def top_up_db_wallet(wallet_address: uuid.UUID, top_up: TopUpSchema, user: User,
             db.commit()
             db.refresh(new_top_up)
 
-            db_wallet.balance += new_top_up.amount
-
-            db.commit()
-            db.refresh(db_wallet)
+            # db_wallet.balance += new_top_up.amount
+            #
+            # db.commit()
+            # db.refresh(db_wallet)
 
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
@@ -57,9 +57,19 @@ def user_top_ups(user_id: str, db: Session):
 
 
 def top_up_details(top_up_id: str, db: Session):
-
     try:
         return db.query(TopUpWallet).filter(TopUpWallet.id == top_up_id).first()
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
+
+async def payment_callback(
+        request: Request,
+        db: Session
+):
+    tx_ref = request.query_params["tx_ref"]
+    payment_status = request.query_params["status"]
+
+    db_payment = db.query(TopUpWallet).filter_by(id=tx_ref).first()
+
+    return db_payment, payment_status

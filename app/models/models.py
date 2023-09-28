@@ -5,6 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import String, ForeignKey, DECIMAL, DateTime
 from sqlalchemy.dialects.postgresql import UUID
 
+from app.schemas.payment_schema import PaymentStatus
 from app.utils.utils import unique_id, api_key_gen, api_test_key_gen
 from app.database.database import Base
 
@@ -17,13 +18,16 @@ class User(Base):
     email: Mapped[str] = mapped_column(String, unique=True)
     first_name: Mapped[str]
     last_name: Mapped[str]
-    phone_number: Mapped[str]
-    wallet: Mapped['Wallet'] = relationship('Wallet', uselist=False, back_populates="user", cascade="all, delete-orphan")
-    withdrawals: Mapped['Withdraw'] = relationship('Withdraw', uselist=False, back_populates="user", cascade="all, delete-orphan")
+    phone_number: Mapped[str] = mapped_column(String, unique=True)
     password: Mapped[str]
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     api_key: Mapped[str] = mapped_column(String, default=api_key_gen, unique=True, nullable=True)
     api_test_key: Mapped[str] = mapped_column(String, default=api_test_key_gen, unique=True, nullable=True)
+    payment_code: Mapped[str] = mapped_column(nullable=True)
+    wallet: Mapped['Wallet'] = relationship('Wallet', uselist=False, back_populates="user",  cascade="all, delete-orphan")
+    members: Mapped['GroupMember'] = relationship('GroupMember', uselist=True, back_populates="user",  cascade="all, delete-orphan")
+    group: Mapped['Group'] = relationship('Group', uselist=True, back_populates="owner",  cascade="all, delete-orphan")
+    withdrawals: Mapped['Withdraw'] = relationship('Withdraw', uselist=False, back_populates="user", cascade="all, delete-orphan")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     def __str__(self):
         return f'{self.username}'
@@ -31,7 +35,7 @@ class User(Base):
 
 class Wallet(Base):
     __tablename__ = "wallets"
-
+    #
     id: Mapped[str] = mapped_column(String, primary_key=True, default=unique_id)
     wallet_address: Mapped[uuid] = mapped_column(UUID, default=uuid.uuid1)
     user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
@@ -39,7 +43,7 @@ class Wallet(Base):
     user: Mapped[User] = relationship("User", back_populates="wallet")
     payments: Mapped[str] = relationship("Payment", back_populates="wallet")
     transfers: Mapped['Transfer'] = relationship("Transfer", back_populates="wallet")
-    withdrawals: Mapped['Transfer'] = relationship("Withdraw", back_populates="wallet")
+    withdrawals: Mapped['Withdraw'] = relationship("Withdraw", back_populates="wallet")
     balance: Mapped[Decimal] = mapped_column(DECIMAL, nullable=False, default=0.0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -55,7 +59,7 @@ class TopUpWallet(Base):
     user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id"), nullable=False)
     amount: Mapped[Decimal] = mapped_column(DECIMAL, nullable=False, default=0.0)
     payment_url: Mapped[str] = mapped_column(String, nullable=True)
-
+    payment_status: Mapped[PaymentStatus] = mapped_column(String, default=PaymentStatus.PENDING)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     def __str__(self):
@@ -105,3 +109,30 @@ class Withdraw(Base):
     user: Mapped[str] = relationship("User", back_populates="withdrawals")
     amount: Mapped[Decimal] = mapped_column(DECIMAL, nullable=False, default=0.0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Group(Base):
+    __tablename__ = 'groups'
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=unique_id)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey('users.id'), nullable=False)
+    bill_amount: Mapped[Decimal]
+    group_name: Mapped[str]
+    members: Mapped[list['GroupMember']] = relationship('GroupMember', back_populates='group')
+    owner: Mapped[str] = relationship('User', back_populates='group')
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class GroupMember(Base):
+    __tablename__ = 'group_members'
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=unique_id)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey('users.id'), nullable=False)
+    group_id: Mapped[str] = mapped_column(String, ForeignKey('groups.id'), nullable=False)
+    member_username: Mapped[str]
+    amount: Mapped[Decimal] = mapped_column(DECIMAL, nullable=True, default=0.00)
+    percentage: Mapped[Decimal] = mapped_column(DECIMAL, nullable=True, default=0.00)
+    group: Mapped[str] = relationship('Group', back_populates='members')
+    user: Mapped[list[User]] = relationship('User', back_populates='members')
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+

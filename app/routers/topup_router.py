@@ -1,9 +1,11 @@
 import uuid
 
-from fastapi import APIRouter, status, Depends
+from fastapi import APIRouter, status, Depends, Request
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
-
+from app.schemas.payment_schema import PaymentStatus
 from app.schemas.topup import TopUpSchema, TopUpResponseSchema
 from app.models.models import User
 from app.schemas.wallet_schema import WalletResponseSchema
@@ -13,6 +15,7 @@ from app.utils.auth import get_current_user
 from app.utils import error_response
 
 top_up_router = APIRouter(prefix='/api/top-up', tags=['Top Up'])
+templates = Jinja2Templates(directory="templates")
 
 
 @top_up_router.get('', status_code=status.HTTP_200_OK)
@@ -41,3 +44,37 @@ def get_top_up_details(top_up_id: str, db: Session = Depends(get_db), current_us
     if not current_user:
         error_response.invalid_exception('Unauthorized')
     return topup_wallet.top_up_details(top_up_id, db)
+
+
+@top_up_router.get(
+    "/callback",
+    status_code=status.HTTP_200_OK,
+    response_description="Payment Successful",
+    response_class=HTMLResponse,
+)
+def top_up_callback(request: Request, db: Session = Depends(get_db)):
+    db_payment, payment_status = topup_wallet.payment_callback(request, db)
+
+    if payment_status == "successful":
+        db_payment.payment_status = PaymentStatus.SUCCESS
+        db.commit()
+        return templates.TemplateResponse(
+            "successful.html",
+            {"request": request},
+        )
+
+    elif payment_status == "cancelled":
+        db_payment.payment_status = PaymentStatus.CANCELED
+        db.commit()
+        return templates.TemplateResponse(
+            "failed.html",
+            {"request": request},
+        )
+
+    else:
+        db_payment.payment_status = PaymentStatus.FAILED
+        db.commit()
+        return templates.TemplateResponse(
+            "failed.html",
+            {"request": request},
+        )

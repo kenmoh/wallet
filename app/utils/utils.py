@@ -13,8 +13,16 @@ def hash_password(password: str):
     return password_context.hash(password)
 
 
+def hash_payment_code(payment_code: str):
+    return password_context.hash(payment_code)
+
+
 def verify_password(plain_password, hashed_password):
     return password_context.verify(plain_password, hashed_password)
+
+
+def verify_payment_code(plain_payment_code, hashed_payment_code):
+    return password_context.verify(plain_payment_code, hashed_payment_code)
 
 
 def unique_id():
